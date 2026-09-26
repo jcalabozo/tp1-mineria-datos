@@ -1,0 +1,3 @@
+# Empareja cada notebook con un .py en formato "percent" (celdas # %%).
+# El .py es el que se versiona en git; el .ipynb es la copia local.
+formats = "ipynb,py:percent"

@@ -1,0 +1,3 @@
+# Normaliza los finales de línea (Windows / Mac / Linux) para evitar
+# diffs falsos en los archivos de texto
+* text=auto
