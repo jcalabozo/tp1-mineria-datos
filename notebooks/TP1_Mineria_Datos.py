@@ -352,11 +352,15 @@ pd.crosstab(y, partes, rownames=["Especie"],
 # puntos del espacio original con las del espacio reducido: cuanto
 # menor es, mejor se conserva la estructura de los datos.
 # Diapositivas U2 ("ISOMAP - Consideraciones prácticas").
+# eigen_solver="dense" hace el cálculo exacto: por defecto Isomap usa
+# un método que parte de un vector aleatorio y el resultado cambia
+# mínimamente entre ejecuciones.
 errores = []
 for k in VECINOS:
     fila = []
     for c in [1, 2, 3, 4]:
-        isomap = Isomap(n_neighbors=k, n_components=c).fit(X_esc)
+        isomap = Isomap(n_neighbors=k, n_components=c,
+                        eigen_solver="dense").fit(X_esc)
         fila.append(isomap.reconstruction_error())
     errores.append(fila)
 
@@ -369,7 +373,8 @@ errores.rename_axis(index="Vecinos", columns="Componentes").round(3)
 # %%
 fig, axes = plt.subplots(1, 4, figsize=(19, 4.5))
 for ax, k in zip(axes, VECINOS):
-    isomap_2d = Isomap(n_neighbors=k, n_components=2).fit_transform(X_esc)
+    isomap_2d = Isomap(n_neighbors=k, n_components=2,
+                       eigen_solver="dense").fit_transform(X_esc)
     sns.scatterplot(x=isomap_2d[:, 0], y=isomap_2d[:, 1], hue=y,
                     palette=PALETA_ESPECIES, s=18, alpha=0.8,
                     legend=(k == 5), ax=ax)
@@ -383,7 +388,8 @@ plt.show()
 # Con 5 y 30 vecinos *Gentoo* queda aplastada sobre una línea, efecto del grafo partido. Con 60 vecinos *Gentoo* deja de estar aplastada y las tres especies quedan diferenciadas. Con 100 el resultado es casi igual al de PCA, como se esperaba.
 
 # %%
-isomap_2d = Isomap(n_neighbors=60, n_components=2).fit_transform(X_esc)
+isomap_2d = Isomap(n_neighbors=60, n_components=2,
+                   eigen_solver="dense").fit_transform(X_esc)
 
 plt.figure(figsize=(7.5, 5.5))
 sns.scatterplot(x=isomap_2d[:, 0], y=isomap_2d[:, 1], hue=y,
