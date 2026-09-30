@@ -63,6 +63,8 @@ sns.set_theme(style="whitegrid")
 PALETA_ESPECIES = {"Adelie": "tab:blue",
                    "Chinstrap": "tab:orange",
                    "Gentoo": "tab:green"}
+# Colores del sexo, distintos de los de las especies
+PALETA_SEXO = {"Hembra": "tab:purple", "Macho": "tab:gray"}
 
 # %% [markdown]
 # ## 1. Análisis exploratorio y preparación de los datos
@@ -105,13 +107,14 @@ datos[datos[columnas_numericas].isna().any(axis=1)]
 # %% [markdown]
 # - **2 filas sin medidas:** se eliminan, porque imputarlas sería inventar el individuo completo.
 # - **3 filas duplicadas:** se eliminan.
-# - **`Sexo`:** tiene 10 faltantes y un valor inválido `"."`, que pasa a faltante. Qué hacer con esta variable se decide en 1.8.
+# - **`Sexo`:** tiene 10 faltantes y un valor inválido `"."`, que pasa a faltante. Como las 2 filas sin medidas tampoco tienen sexo, después de eliminarlas quedan 9 pingüinos sin sexo, todos con sus cuatro medidas completas. Los valores se traducen (`"MALE"` → `"Macho"`, `"FEMALE"` → `"Hembra"`). Qué hacer con esta variable y con sus faltantes se analiza en 1.8.
 # - Se acortan los nombres de las especies (`"Adelie Penguin"` → `"Adelie"`).
 
 # %%
 datos = datos.drop_duplicates()
 datos = datos.dropna(subset=columnas_numericas)
-datos["Sexo"] = datos["Sexo"].replace(".", np.nan)
+datos["Sexo"] = datos["Sexo"].replace({".": np.nan, "MALE": "Macho",
+                                       "FEMALE": "Hembra"})
 datos["Especie"] = datos["Especie"].str.split().str[0]
 datos = datos.reset_index(drop=True)
 
@@ -155,7 +158,7 @@ plt.show()
 
 
 # %% [markdown]
-# Coincide con lo esperado. *Gentoo* aparece separada, o apenas en contacto con el resto, en todos los gráficos con profundidad del culmen, aleta o masa. La primera columna (longitud del culmen contra cada una de las otras variables) muestra tres nubes separadas; en los demás gráficos *Adelie* y *Chinstrap* se superponen. Algunas distribuciones tienen dos picos (por ejemplo, la masa de *Gentoo*), lo que sugiere subgrupos dentro de cada especie.
+# Coincide con lo esperado. *Gentoo* aparece separada, o apenas en contacto con el resto, en todos los gráficos con profundidad del culmen, aleta o masa. La primera columna (longitud del culmen contra cada una de las otras variables) muestra tres nubes separadas; en los demás gráficos *Adelie* y *Chinstrap* se superponen. Algunas distribuciones tienen dos picos (por ejemplo, la masa de *Gentoo*), lo que sugiere subgrupos dentro de cada especie; en 1.8 se verifica si se deben al sexo.
 
 # %% [markdown]
 # ### 1.6 Valores atípicos (outliers)
@@ -225,15 +228,80 @@ plt.show()
 # Se confirma: aleta y masa tienen una correlación de 0.87, y ambas se relacionan con la longitud del culmen (0.65 y 0.59). La profundidad del culmen es negativa con el resto por efecto de *Gentoo* (aleta larga, mayor masa y culmen poco profundo); dentro de cada especie, en cambio, la relación es positiva. Esta redundancia sugiere que PCA podrá resumir los datos en pocas componentes.
 
 # %% [markdown]
-# ### 1.8 Variables categóricas y estandarización
+# ### 1.8 La variable `Sexo`
 #
-# Quedan dos variables categóricas: `Especie` (objetivo) y `Sexo`. Distribución de `Sexo` en cada especie:
+# Además de `Especie` (objetivo), queda una sola variable categórica: `Sexo`. Antes de decidir si se usa y qué hacer con sus faltantes, se analiza cómo se distribuye y qué relación tiene con la especie y con las medidas.
+#
+# #### Distribución del sexo por especie
+#
+# En una población natural esperamos una proporción cercana a 50/50 de machos y hembras en cada especie. Si es así, el sexo no aporta información para distinguir especies.
 
 # %%
-pd.crosstab(datos["Especie"], datos["Sexo"], normalize="index").round(2)
+# Cantidad de pingüinos por especie y sexo ("Sin dato": sexo faltante)
+display(pd.crosstab(datos["Especie"], datos["Sexo"].fillna("Sin dato"),
+                    margins=True, margins_name="Total"))
+
+# Proporción de cada sexo dentro de cada especie (solo sexo conocido)
+pd.crosstab(datos["Especie"], datos["Sexo"], normalize="index").round(3)
 
 # %% [markdown]
-# `Sexo` se reparte 50/50 en las tres especies, así que no ayuda a distinguirlas. Además, sus faltantes no se pueden imputar con un criterio razonable, y la U2 desaconseja inventar una categoría "Desconocido". Por eso se **elimina** de las características, como en los notebooks de la cátedra, donde PCA, Isomap y t-SNE se aplican solo sobre variables numéricas. Se conserva en `datos` para interpretar los clusters.
+# Coincide con lo esperado. Entre los pingüinos de sexo conocido hay 163 hembras y 164 machos, y en cada especie la diferencia entre ambos sexos es de 0 a 2 individuos (entre 49% y 51% de cada sexo). Es decir, saber el sexo de un pingüino no dice nada sobre su especie.
+#
+# Los 9 faltantes (2.7% de los datos) están solo en *Adelie* (5) y *Gentoo* (4); todos los *Chinstrap* tienen el sexo registrado.
+#
+# #### Medidas por especie y sexo
+#
+# Aunque el sexo no distinga especies, puede influir en las medidas. Si los machos son más grandes que las hembras, eso explicaría los dos picos vistos en algunas distribuciones del pairplot (1.5).
+
+# %%
+fig, axes = plt.subplots(1, 4, figsize=(18, 4.5))
+for ax, col in zip(axes, columnas_numericas):
+    sns.violinplot(data=datos, x="Especie", y=col, hue="Sexo",
+                   hue_order=["Hembra", "Macho"], palette=PALETA_SEXO,
+                   split=True, inner="quart",
+                   legend=(col == columnas_numericas[0]), ax=ax)
+    ax.set(title=col, xlabel="", ylabel="")
+fig.suptitle("Distribución de cada medida por especie y sexo "
+             "(las líneas marcan los cuartiles)")
+plt.tight_layout()
+plt.show()
+
+# %%
+# Diferencia de medias macho − hembra dentro de cada especie, junto a la
+# diferencia entre las dos especies más parecidas (Chinstrap − Adelie)
+medias_sexo = datos.groupby(["Especie", "Sexo"])[columnas_numericas].mean()
+medias_especie = datos.groupby("Especie")[columnas_numericas].mean()
+
+diferencias = pd.DataFrame(
+    {f"Macho − hembra ({especie})":
+         medias_sexo.loc[(especie, "Macho")]
+         - medias_sexo.loc[(especie, "Hembra")]
+     for especie in ["Adelie", "Chinstrap", "Gentoo"]})
+diferencias["Chinstrap − Adelie"] = (medias_especie.loc["Chinstrap"]
+                                     - medias_especie.loc["Adelie"])
+diferencias.round(1)
+
+# %% [markdown]
+# Coincide con lo esperado: en las tres especies los machos superan a las hembras en las cuatro medidas. La diferencia más marcada es la masa (entre 360 y 800 g); en *Gentoo* los picos de machos y hembras están separados por unos 800 g y se superponen poco, y esa es la causa de los dos picos del pairplot.
+#
+# La tabla muestra algo importante para el resto del trabajo. Entre *Adelie* y *Chinstrap*, la diferencia por sexo es **mayor que la diferencia por especie** en la profundidad del culmen (alrededor de 1.5 mm contra 0.1 mm) y en la masa (360 a 670 g contra 34 g), y comparable en la aleta (4 a 8 mm contra 6 mm). Solo la longitud del culmen separa más a las especies (10 mm) que a los sexos (3 a 4.5 mm). Por lo tanto, al agrupar por distancias es posible que *Adelie* y *Chinstrap* se dividan por tamaño (sexo) antes que por especie; esto se revisa en las secciones 5 y 6.
+#
+# #### ¿Por qué no se usa `Sexo` como característica?
+#
+# `Sexo` se **elimina de las características**, por cuatro motivos:
+# 1. No aporta información sobre la especie (reparto cercano a 50/50 en las tres).
+# 2. Para usarla habría que codificarla como 0/1. Al estandarizar, esa columna pesaría lo mismo que cada medida y, a diferencia de ellas, dividiría los datos en dos grupos perfectamente separados, así que los métodos tenderían a agrupar por sexo en lugar de por especie.
+# 3. Obligaría a imputar o eliminar los 9 pingüinos sin sexo.
+# 4. En los notebooks de la cátedra PCA, Isomap, t-SNE y el clustering se aplican solo sobre variables numéricas.
+#
+# Sí se conserva en `datos` para **interpretar** los resultados: como el sexo modifica las medidas, sirve para verificar si los subgrupos que encuentren los métodos se deben a él.
+#
+# #### Faltantes de `Sexo`
+#
+# No se imputan. Con un reparto 50/50, la moda (global o por especie, como en la U2) se decide por uno o dos individuos, y la categoría "Desconocido" crea un valor que no existe en el fenómeno estudiado. Como `Sexo` no entra en ningún método, sus 9 faltantes no afectan a PCA, Isomap, t-SNE ni al clustering: esos pingüinos se usan en todos los análisis y solo quedan fuera de las tablas que cruzan clusters con sexo.
+
+# %% [markdown]
+# ### 1.9 Estandarización
 #
 # `Especie` se guarda en `y` y solo se usa para colorear los gráficos y comparar resultados. Las cuatro medidas se estandarizan.
 
@@ -558,20 +626,24 @@ for k in [2, 3, 6]:
 # %% [markdown]
 # - **k = 2:** separa perfectamente a *Gentoo* del resto.
 # - **k = 3:** *Chinstrap* no queda absorbida, pero se mezcla con *Adelie*: un cluster tiene 127 *Adelie* y 5 *Chinstrap*, y otro 61 *Chinstrap* y 21 *Adelie*.
-# - **k = 6:** cada especie se reparte en dos clusters. Se verifica si esos subgrupos se relacionan con `Sexo`, que no se usó para agrupar:
+# - **k = 6:** cada especie se reparte en dos clusters.
+#
+# Por lo visto en 1.8, sospechamos que tanto los errores de k = 3 como los subgrupos de k = 6 se deben al sexo, que no se usó para agrupar. Se verifica:
 
 # %%
-kmeans = KMeans(n_clusters=6, n_init=10, random_state=SEMILLA)
-etiquetas = kmeans.fit_predict(X_esc)
-print("k = 6 vs. especie y sexo (se omiten los de sexo desconocido)")
-display(pd.crosstab([y, datos["Sexo"]], etiquetas,
-                    rownames=["Especie", "Sexo"], colnames=["Cluster"]))
-
-print("Promedio de cada medida por especie y sexo")
-datos.groupby(["Especie", "Sexo"])[columnas_numericas].mean().round(1)
+for k in [3, 6]:
+    kmeans = KMeans(n_clusters=k, n_init=10, random_state=SEMILLA)
+    etiquetas = kmeans.fit_predict(X_esc)
+    print(f"k = {k} vs. especie y sexo "
+          "(se omiten los de sexo desconocido)")
+    display(pd.crosstab([y, datos["Sexo"]], etiquetas,
+                        rownames=["Especie", "Sexo"], colnames=["Cluster"]))
 
 # %% [markdown]
-# Los subgrupos coinciden casi exactamente con el sexo (por ejemplo, 69 de las 72 hembras *Adelie* están en un cluster y 56 de los 71 machos en otro). En las tres especies los machos superan a las hembras en las cuatro medidas (entre 360 y 800 g más de masa), por eso GAP encuentra más clusters que especies. Esto también explica los dos picos vistos en el pairplot.
+# Se confirma en los dos casos:
+#
+# - **k = 3:** los errores siguen al tamaño. De los 21 *Adelie* agrupados con los *Chinstrap*, 20 son machos (el otro no tiene sexo registrado), y los 5 *Chinstrap* agrupados con los *Adelie* son hembras. Es lo anticipado en 1.8: como en profundidad del culmen, aleta y masa la diferencia por sexo es mayor o comparable a la diferencia entre estas dos especies, los *Adelie* grandes quedan cerca de los *Chinstrap* y las *Chinstrap* chicas cerca de los *Adelie*.
+# - **k = 6:** los subgrupos coinciden casi exactamente con el sexo (por ejemplo, 69 de las 72 hembras *Adelie* están en un cluster y 56 de los 71 machos en otro). Como en las tres especies los machos superan a las hembras en las cuatro medidas (entre 360 y 800 g más de masa), GAP encuentra más clusters que especies.
 
 # %%
 # Gráfico 3D con tres atributos originales, coloreado por cluster
@@ -693,22 +765,23 @@ plt.show()
 # - **GAP:** crece hasta k = 5 y después forma una meseta; `OptimalK` da **k = 5**.
 
 # %%
-for k in [2, 3]:
+jerarquico = AgglomerativeClustering(n_clusters=2, linkage="ward")
+etiquetas = jerarquico.fit_predict(X_esc)
+print("k = 2")
+display(pd.crosstab(y, etiquetas, rownames=["Especie"],
+                    colnames=["Cluster"]))
+
+for k in [3, 5]:
     jerarquico = AgglomerativeClustering(n_clusters=k, linkage="ward")
     etiquetas = jerarquico.fit_predict(X_esc)
-    print(f"k = {k}")
-    display(pd.crosstab(y, etiquetas, rownames=["Especie"],
-                        colnames=["Cluster"]))
-
-jerarquico = AgglomerativeClustering(n_clusters=5, linkage="ward")
-etiquetas = jerarquico.fit_predict(X_esc)
-print("k = 5 vs. especie y sexo (se omiten los de sexo desconocido)")
-pd.crosstab([y, datos["Sexo"]], etiquetas, rownames=["Especie", "Sexo"],
-            colnames=["Cluster"])
+    print(f"k = {k} vs. especie y sexo "
+          "(se omiten los de sexo desconocido)")
+    display(pd.crosstab([y, datos["Sexo"]], etiquetas,
+                        rownames=["Especie", "Sexo"], colnames=["Cluster"]))
 
 # %% [markdown]
 # - **k = 2:** separa a *Gentoo* del resto.
-# - **k = 3:** reproduce las especies mucho mejor que K-means: solo 10 *Chinstrap* quedan agrupados con los *Adelie*.
+# - **k = 3:** reproduce las especies mucho mejor que K-means: todos los *Adelie* y *Gentoo* quedan en su cluster, y solo 10 *Chinstrap* quedan agrupados con los *Adelie*. Los 10 son hembras, las *Chinstrap* más chicas, igual que en K-means.
 # - **k = 5:** *Adelie* y *Gentoo* se dividen principalmente por sexo (por ejemplo, los 60 machos *Gentoo* en un cluster y 49 de las 58 hembras en otro); *Chinstrap* queda mayormente en un solo cluster (56 de 66).
 #
 # **Número que mejor representa los datos:** Silhouette elige 2 y GAP 5. Elegimos **k = 3**: tiene el segundo mejor Silhouette, coincide con el salto del dendrograma y reproduce las especies con muy pocos errores. k = 2 solo separa a *Gentoo*, y k = 5 divide las especies por sexo.
@@ -716,8 +789,8 @@ pd.crosstab([y, datos["Sexo"]], etiquetas, rownames=["Especie", "Sexo"],
 # %% [markdown]
 # ## 7. Conclusiones
 #
-# 1. **Datos:** se trabajó con 336 pingüinos, luego de eliminar 3 duplicados, 2 registros vacíos y 6 atípicos. `Sexo` se excluyó porque se reparte igual en las tres especies, y las medidas se estandarizaron.
-# 2. **Estructura:** *Gentoo* es claramente distinta (aleta más larga, mayor masa y culmen menos profundo), mientras que *Adelie* y *Chinstrap* solo se distinguen por la longitud del culmen. Dentro de cada especie hay subgrupos por sexo.
+# 1. **Datos:** se trabajó con 336 pingüinos, luego de eliminar 3 duplicados, 2 registros vacíos y 6 atípicos. Las cuatro medidas se estandarizaron. `Sexo` se excluyó de las características: no aporta información sobre la especie (reparto cercano a 50/50 en las tres) y, al incluirla, los métodos tenderían a agrupar por sexo en lugar de por especie. Sus 9 faltantes no se imputaron, porque con un reparto 50/50 la moda es arbitraria. Como la variable no entra en ningún método, se dejaron como faltantes sin perder esos pingüinos.
+# 2. **Estructura:** *Gentoo* es claramente distinta (aleta más larga, mayor masa y culmen menos profundo), mientras que *Adelie* y *Chinstrap* solo se distinguen por la longitud del culmen. Dentro de cada especie los machos son más grandes que las hembras en las cuatro medidas, y en profundidad del culmen, aleta y masa esa diferencia es mayor o comparable a la que hay entre *Adelie* y *Chinstrap*. Por eso los errores de clustering entre estas dos especies son *Adelie* machos y *Chinstrap* hembras.
 # 3. **Reducción de la dimensionalidad:** PCA con 2 componentes conserva el 88.1% de la varianza y se interpreta fácilmente, pero no separa del todo a *Adelie* de *Chinstrap*. Isomap depende mucho del número de vecinos (con pocos deforma a *Gentoo* y con muchos se parece a PCA); con 60 separa las tres especies. t-SNE (perplejidad 30) logra la separación más clara.
 # 4. **Clustering:** Silhouette elige k = 2 y GAP 5 o 6 (subgrupos por sexo). Con k = 3, el clustering jerárquico reproduce las especies mucho mejor que K-means (10 pingüinos mal agrupados contra 26).
 # 5. **Hipótesis inicial:** los tres grupos esperados se confirman solo en parte. *Gentoo* se separa con cualquier método, pero la separación entre *Adelie* y *Chinstrap* depende del método y de sus parámetros. El número de clusters "óptimo" depende del criterio usado y del nivel de detalle que se busque.
