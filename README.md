@@ -16,7 +16,8 @@ TP1/
 │   └── TP1_enunciado.pdf          # consigna del trabajo
 ├── notebooks/
 │   ├── TP1_Mineria_Datos.py       # informe versionado en git (formato jupytext)
-│   └── TP1_Mineria_Datos.ipynb    # copia local generada con jupytext (no se sube)
+│   ├── TP1_Mineria_Datos_con_sexo.py  # versión alternativa que usa Sexo como característica
+│   └── *.ipynb                    # copias locales generadas con jupytext (no se suben)
 ├── jupytext.toml                  # empareja cada .ipynb con su .py
 ├── requirements.txt               # dependencias con versiones fijas
 ├── .gitattributes
@@ -75,6 +76,8 @@ Requisito: **Python 3.12** (es la versión con la que se probó).
    ```bash
    jupytext --sync notebooks/TP1_Mineria_Datos.py
    ```
+
+   Para la versión con `Sexo`, lo mismo con `notebooks/TP1_Mineria_Datos_con_sexo.py`.
 
 ## Cómo trabajar (cada vez)
 
