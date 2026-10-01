@@ -618,40 +618,62 @@ for k in [3, 6]:
 # - **k = 6:** los subgrupos coinciden casi exactamente con el sexo (por ejemplo, 69 de las 72 hembras *Adelie* están en un cluster y 56 de los 71 machos en otro). Como en las tres especies los machos superan a las hembras en las cuatro medidas (entre 360 y 800 g más de masa), GAP encuentra más clusters que especies.
 
 # %%
-# Gráfico 3D con tres atributos originales, coloreado por cluster
-# (como en Unidad3.py). Las estrellas son los centroides, llevados a
-# las unidades originales con inverse_transform.
-col_x = "Longitud Culmen (mm)"
-col_y = "Profundidad Culmen (mm)"
-col_z = "Longitud Aleta (mm)"
+# Clusters sobre el t-SNE elegido en la sección 4 (tsne_2d, perplejidad
+# 30 y 1000 iteraciones): el color es la especie y la forma, el cluster
+MARCADORES = ["o", "X", "^", "s", "P", "D"]
 
-fig = plt.figure(figsize=(20, 6.5))
-for i, k in enumerate([2, 3, 6], start=1):
+fig, axes = plt.subplots(1, 3, figsize=(19, 5.5))
+for ax, k in zip(axes, [2, 3, 6]):
     kmeans = KMeans(n_clusters=k, n_init=10, random_state=SEMILLA)
-    kmeans.fit(X_esc)
-    centroides = pd.DataFrame(
-        escalador.inverse_transform(kmeans.cluster_centers_),
-        columns=columnas_numericas)
-    colores = sns.color_palette("husl", k)
-
-    ax = fig.add_subplot(1, 3, i, projection="3d")
-    for c in range(k):
-        puntos = X[kmeans.labels_ == c]
-        ax.scatter(puntos[col_x], puntos[col_y], puntos[col_z], s=15,
-                   alpha=0.6, color=colores[c], label=f"Cluster {c}")
-        ax.scatter(centroides.loc[c, col_x], centroides.loc[c, col_y],
-                   centroides.loc[c, col_z], marker="*", s=350,
-                   color=colores[c], edgecolor="black")
-    ax.set(xlabel=col_x, ylabel=col_y, zlabel=col_z,
-           title=f"K-means con k = {k}")
-    ax.view_init(elev=25, azim=120)  # ángulo en el que mejor se ven
-    ax.legend(loc="upper left", fontsize=8)
-
+    clusters = pd.Series(kmeans.fit_predict(X_esc), name="Cluster")
+    sns.scatterplot(x=tsne_2d[:, 0], y=tsne_2d[:, 1], hue=y,
+                    style=clusters, markers=MARCADORES[:k],
+                    palette=PALETA_ESPECIES, s=45, alpha=0.8, ax=ax)
+    ax.set(title=f"K-means con k = {k}", xlabel="t-SNE 1",
+           ylabel="t-SNE 2")
+    ax.legend(loc="upper center", fontsize=8)  # zona vacía del gráfico
+fig.suptitle("Clusters de K-means sobre el t-SNE (color: especie, "
+             "forma: cluster)")
 plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# Con k = 2 se separan los pingüinos de aleta larga y culmen poco profundo (*Gentoo*). Con k = 3, la frontera entre los dos grupos de culmen profundo no coincide con la división entre *Adelie* y *Chinstrap*. Con k = 6 cada grupo se divide en individuos más chicos y más grandes, que corresponden principalmente a hembras y machos.
+# En el t-SNE las especies forman tres grupos, así que se puede ver qué separa cada k:
+#
+# - **k = 2:** *Gentoo* tiene una forma, y *Adelie* y *Chinstrap* comparten la otra.
+# - **k = 3:** casi todos los *Chinstrap* comparten forma, pero esa forma también aparece en la parte de arriba del grupo de *Adelie*, la más cercana a *Chinstrap*: son los 21 *Adelie* agrupados con los *Chinstrap*, casi todos machos. Los 5 *Chinstrap* agrupados con los *Adelie* son justamente los que t-SNE ubica pegados al grupo de *Adelie*.
+# - **k = 6:** cada especie aparece con dos formas, que corresponden principalmente a hembras y machos.
+
+# %%
+# Gráfico 3D con tres atributos originales, coloreado por cluster
+# (como en Unidad3.py), para k = 3. Las estrellas son los centroides,
+# llevados a las unidades originales con inverse_transform.
+col_x = "Longitud Culmen (mm)"
+col_y = "Profundidad Culmen (mm)"
+col_z = "Longitud Aleta (mm)"
+
+kmeans = KMeans(n_clusters=3, n_init=10, random_state=SEMILLA).fit(X_esc)
+centroides = pd.DataFrame(
+    escalador.inverse_transform(kmeans.cluster_centers_),
+    columns=columnas_numericas)
+colores = sns.color_palette("husl", 3)
+
+fig = plt.figure(figsize=(8, 6.5))
+ax = fig.add_subplot(projection="3d")
+for c in range(3):
+    puntos = X[kmeans.labels_ == c]
+    ax.scatter(puntos[col_x], puntos[col_y], puntos[col_z], s=15,
+               alpha=0.6, color=colores[c], label=f"Cluster {c}")
+    ax.scatter(centroides.loc[c, col_x], centroides.loc[c, col_y],
+               centroides.loc[c, col_z], marker="*", s=350,
+               color=colores[c], edgecolor="black")
+ax.set(xlabel=col_x, ylabel=col_y, zlabel=col_z, title="K-means con k = 3")
+ax.view_init(elev=25, azim=120)  # ángulo en el que mejor se ven
+ax.legend(loc="upper left", fontsize=8)
+plt.show()
+
+# %% [markdown]
+# Se separan los pingüinos de aleta larga y culmen poco profundo (*Gentoo*), pero la frontera entre los dos grupos de culmen profundo no coincide con la división entre *Adelie* y *Chinstrap*: el cluster de culmen largo incluye también a los *Adelie* más grandes.
 
 # %% [markdown]
 # ## 6. Clustering jerárquico
