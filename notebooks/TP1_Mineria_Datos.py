@@ -40,18 +40,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.cluster.hierarchy as sch
-from scipy.sparse.csgraph import connected_components
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.manifold import Isomap, TSNE
-from sklearn.neighbors import kneighbors_graph
 from sklearn.cluster import KMeans, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
 from gap_statistic import OptimalK
 from IPython.display import display
 
-# Avisos de Isomap que no afectan los resultados (el del grafo
-# desconectado se analiza en la sección 3)
+# Avisos que Isomap muestra con pocos vecinos (su efecto se ve en los
+# gráficos de la sección 3)
 warnings.filterwarnings("ignore", message="Changing the sparsity structure")
 warnings.filterwarnings("ignore",
                         message="The number of connected components")
@@ -390,59 +388,14 @@ plt.show()
 # %% [markdown]
 # ## 3. Isomap
 #
-# Esperamos que con pocos vecinos los grupos queden más separados y que con muchos el resultado se parezca al de PCA. Como *Gentoo* está muy alejada del resto, con pocos vecinos el grafo podría quedar dividido, algo que las diapositivas de la U2 señalan como un problema. Se prueban 5, 30, 60 y 100 vecinos:
+# Esperamos que con pocos vecinos los grupos queden más separados y que con muchos el resultado se parezca al de PCA. Como *Gentoo* está muy alejada del resto, con pocos vecinos el grafo podría quedar dividido, algo que las diapositivas de la U2 señalan como un problema. Primero se prueban 5, 30, 60 y 100 vecinos con 2 componentes, y después una tercera componente con el número de vecinos elegido.
 
 # %%
 VECINOS = [5, 30, 60, 100]
 
-# Diapositivas U2 ("ISOMAP - Consideraciones prácticas"): con k chico
-# el grafo de vecinos puede quedar desconectado. kneighbors_graph
-# (scikit-learn) arma el grafo que usa Isomap y connected_components
-# (scipy) cuenta en cuántas partes separadas queda.
-for k in VECINOS:
-    grafo = kneighbors_graph(X_esc, n_neighbors=k)
-    n_partes, _ = connected_components(grafo)
-    print(f"{k} vecinos: el grafo tiene {n_partes} parte(s)")
-
-# Qué pingüinos quedan en cada parte con 30 vecinos
-grafo = kneighbors_graph(X_esc, n_neighbors=30)
-n_partes, partes = connected_components(grafo)
-pd.crosstab(y, partes, rownames=["Especie"],
-            colnames=["Parte del grafo (30 vecinos)"])
-
-# %% [markdown]
-# Con 5 y 30 vecinos el grafo queda partido en dos, y una de las partes son todos los *Gentoo*; con 60 y 100 queda conectado. Cuando el grafo está partido, scikit-learn une las partes por los puntos más cercanos, lo que puede deformar el resultado.
-#
-# Error de reconstrucción según el número de vecinos y de componentes:
-
-# %%
-# reconstruction_error() de scikit-learn compara las distancias entre
-# puntos del espacio original con las del espacio reducido: cuanto
-# menor es, mejor se conserva la estructura de los datos.
-# Diapositivas U2 ("ISOMAP - Consideraciones prácticas").
-# eigen_solver="dense" hace el cálculo exacto: por defecto Isomap usa
-# un método que parte de un vector aleatorio y el resultado cambia
-# mínimamente entre ejecuciones.
-errores = []
-for k in VECINOS:
-    fila = []
-    for c in [1, 2, 3, 4]:
-        isomap = Isomap(n_neighbors=k, n_components=c,
-                        eigen_solver="dense").fit(X_esc)
-        fila.append(isomap.reconstruction_error())
-    errores.append(fila)
-
-errores = pd.DataFrame(errores, index=VECINOS, columns=[1, 2, 3, 4])
-errores.rename_axis(index="Vecinos", columns="Componentes").round(3)
-
-# %% [markdown]
-# En todos los casos el error baja al agregar componentes, sobre todo al pasar de 1 a 2, igual que en PCA. Las filas no se comparan entre sí, porque cada número de vecinos arma un grafo distinto.
-
-# %%
 fig, axes = plt.subplots(1, 4, figsize=(19, 4.5))
 for ax, k in zip(axes, VECINOS):
-    isomap_2d = Isomap(n_neighbors=k, n_components=2,
-                       eigen_solver="dense").fit_transform(X_esc)
+    isomap_2d = Isomap(n_neighbors=k, n_components=2).fit_transform(X_esc)
     sns.scatterplot(x=isomap_2d[:, 0], y=isomap_2d[:, 1], hue=y,
                     palette=PALETA_ESPECIES, s=18, alpha=0.8,
                     legend=(k == 5), ax=ax)
@@ -453,11 +406,10 @@ plt.tight_layout()
 plt.show()
 
 # %% [markdown]
-# Con 5 y 30 vecinos *Gentoo* queda aplastada sobre una línea, efecto del grafo partido. Con 60 vecinos *Gentoo* deja de estar aplastada y las tres especies quedan diferenciadas. Con 100 el resultado es casi igual al de PCA, como se esperaba.
+# Coincide con lo esperado. Con 5 y 30 vecinos *Gentoo*, que está muy alejada del resto, queda aplastada sobre una línea: es la deformación que las diapositivas de la U2 atribuyen a un grafo de vecinos desconectado. Con 60 vecinos *Gentoo* deja de estar aplastada y las tres especies quedan diferenciadas. Con 100 el resultado es casi igual al de PCA.
 
 # %%
-isomap_2d = Isomap(n_neighbors=60, n_components=2,
-                   eigen_solver="dense").fit_transform(X_esc)
+isomap_2d = Isomap(n_neighbors=60, n_components=2).fit_transform(X_esc)
 
 plt.figure(figsize=(7.5, 5.5))
 sns.scatterplot(x=isomap_2d[:, 0], y=isomap_2d[:, 1], hue=y,
@@ -468,7 +420,27 @@ plt.ylabel("Componente 2")
 plt.show()
 
 # %% [markdown]
-# Elegimos **60 vecinos**, el menor valor probado con el grafo conectado. *Gentoo* queda bien separada, y *Adelie* y *Chinstrap* quedan una al lado de la otra, con algo de mezcla en la zona de contacto.
+# Elegimos **60 vecinos**: es el menor valor probado en el que *Gentoo* deja de quedar aplastada, y con más vecinos (100) el resultado se parece al de PCA y no aporta nada que PCA no muestre. *Gentoo* queda bien separada, y *Adelie* y *Chinstrap* quedan una al lado de la otra, con algo de mezcla en la zona de contacto.
+#
+# Con 60 vecinos se prueba una tercera componente. Esperamos que aporte poco, como en PCA, donde PC3 explica el 9.2% de la varianza.
+
+# %%
+# Isomap con 3 componentes, como el gráfico 3D del notebook de la U2
+isomap_3d = Isomap(n_neighbors=60, n_components=3).fit_transform(X_esc)
+
+fig = plt.figure(figsize=(8, 6.5))
+ax = fig.add_subplot(projection="3d")
+for especie, color in PALETA_ESPECIES.items():
+    puntos = isomap_3d[y == especie]
+    ax.scatter(puntos[:, 0], puntos[:, 1], puntos[:, 2], s=15, alpha=0.7,
+               color=color, label=especie)
+ax.set(xlabel="Componente 1", ylabel="Componente 2",
+       zlabel="Componente 3", title="Isomap 3D (n_neighbors = 60)")
+ax.legend()
+plt.show()
+
+# %% [markdown]
+# Coincide con lo esperado: la tercera componente no mejora la separación. *Gentoo* sigue aparte, y *Adelie* y *Chinstrap* siguen una al lado de la otra, con la misma zona de contacto que en 2D. Con 2 componentes alcanza, igual que en PCA.
 
 # %% [markdown]
 # ## 4. t-SNE
@@ -783,6 +755,35 @@ for k in [3, 5]:
 # - **k = 2:** separa a *Gentoo* del resto.
 # - **k = 3:** reproduce las especies mucho mejor que K-means: todos los *Adelie* y *Gentoo* quedan en su cluster, y solo 10 *Chinstrap* quedan agrupados con los *Adelie*. Los 10 son hembras, las *Chinstrap* más chicas, igual que en K-means.
 # - **k = 5:** *Adelie* y *Gentoo* se dividen principalmente por sexo (por ejemplo, los 60 machos *Gentoo* en un cluster y 49 de las 58 hembras en otro); *Chinstrap* queda mayormente en un solo cluster (56 de 66).
+
+# %%
+# Gráfico 3D con los mismos atributos y ángulo que en K-means. Las
+# estrellas son la media de cada cluster (el jerárquico no calcula
+# centroides).
+fig = plt.figure(figsize=(20, 6.5))
+for i, k in enumerate([2, 3, 5], start=1):
+    jerarquico = AgglomerativeClustering(n_clusters=k, linkage="ward")
+    etiquetas = jerarquico.fit_predict(X_esc)
+    colores = sns.color_palette("husl", k)
+
+    ax = fig.add_subplot(1, 3, i, projection="3d")
+    for c in range(k):
+        puntos = X[etiquetas == c]
+        media = puntos.mean()
+        ax.scatter(puntos[col_x], puntos[col_y], puntos[col_z], s=15,
+                   alpha=0.6, color=colores[c], label=f"Cluster {c}")
+        ax.scatter(media[col_x], media[col_y], media[col_z], marker="*",
+                   s=350, color=colores[c], edgecolor="black")
+    ax.set(xlabel=col_x, ylabel=col_y, zlabel=col_z,
+           title=f"Jerárquico con k = {k}")
+    ax.view_init(elev=25, azim=120)
+    ax.legend(loc="upper left", fontsize=8)
+
+plt.tight_layout()
+plt.show()
+
+# %% [markdown]
+# Con k = 2 el resultado es igual al de K-means: se separan los pingüinos de aleta larga y culmen poco profundo (*Gentoo*). Con k = 3 la diferencia está en la frontera entre los dos grupos de culmen profundo. En el jerárquico, el cluster de culmen largo es solo de *Chinstrap* (56 pingüinos); en K-means tenía 82, porque incluía a los *Adelie* más grandes. Por eso el jerárquico comete menos errores. Con k = 5, *Gentoo* y *Adelie* se dividen en individuos más grandes y más chicos (principalmente machos y hembras), mientras que la mayoría de *Chinstrap* queda en un solo cluster.
 #
 # **Número que mejor representa los datos:** Silhouette elige 2 y GAP 5. Elegimos **k = 3**: tiene el segundo mejor Silhouette, coincide con el salto del dendrograma y reproduce las especies con muy pocos errores. k = 2 solo separa a *Gentoo*, y k = 5 divide las especies por sexo.
 
@@ -791,6 +792,6 @@ for k in [3, 5]:
 #
 # 1. **Datos:** se trabajó con 336 pingüinos, luego de eliminar 3 duplicados, 2 registros vacíos y 6 atípicos. Las cuatro medidas se estandarizaron. `Sexo` se excluyó de las características: no aporta información sobre la especie (reparto cercano a 50/50 en las tres) y, al incluirla, los métodos tenderían a agrupar por sexo en lugar de por especie. Sus 9 faltantes no se imputaron, porque con un reparto 50/50 la moda es arbitraria. Como la variable no entra en ningún método, se dejaron como faltantes sin perder esos pingüinos.
 # 2. **Estructura:** *Gentoo* es claramente distinta (aleta más larga, mayor masa y culmen menos profundo), mientras que *Adelie* y *Chinstrap* solo se distinguen por la longitud del culmen. Dentro de cada especie los machos son más grandes que las hembras en las cuatro medidas, y en profundidad del culmen, aleta y masa esa diferencia es mayor o comparable a la que hay entre *Adelie* y *Chinstrap*. Por eso los errores de clustering entre estas dos especies son *Adelie* machos y *Chinstrap* hembras.
-# 3. **Reducción de la dimensionalidad:** PCA con 2 componentes conserva el 88.1% de la varianza y se interpreta fácilmente, pero no separa del todo a *Adelie* de *Chinstrap*. Isomap depende mucho del número de vecinos (con pocos deforma a *Gentoo* y con muchos se parece a PCA); con 60 separa las tres especies. t-SNE (perplejidad 30) logra la separación más clara.
+# 3. **Reducción de la dimensionalidad:** PCA con 2 componentes conserva el 88.1% de la varianza y se interpreta fácilmente, pero no separa del todo a *Adelie* de *Chinstrap*. Isomap depende mucho del número de vecinos (con pocos deforma a *Gentoo* y con muchos se parece a PCA); con 60 separa las tres especies, y una tercera componente no mejora la separación. t-SNE (perplejidad 30) logra la separación más clara.
 # 4. **Clustering:** Silhouette elige k = 2 y GAP 5 o 6 (subgrupos por sexo). Con k = 3, el clustering jerárquico reproduce las especies mucho mejor que K-means (10 pingüinos mal agrupados contra 26).
 # 5. **Hipótesis inicial:** los tres grupos esperados se confirman solo en parte. *Gentoo* se separa con cualquier método, pero la separación entre *Adelie* y *Chinstrap* depende del método y de sus parámetros. El número de clusters "óptimo" depende del criterio usado y del nivel de detalle que se busque.
